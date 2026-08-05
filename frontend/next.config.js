@@ -22,7 +22,14 @@ const nextConfig = {
     const backendBase =
       process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
+    const wa2Base =
+      process.env.NEXT_PUBLIC_WA2_API_URL || "https://wa2-api.vercel.app/api";
+
     return [
+      {
+        source: "/wa2-api/:path*",
+        destination: `${wa2Base}/:path*`,
+      },
       {
         source: "/wasender-proxy/:path*",
         destination: `${wasenderBase}/:path*`,

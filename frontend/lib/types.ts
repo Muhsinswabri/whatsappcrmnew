@@ -36,6 +36,8 @@ export interface Stats {
   messages_today: number;
   human_takeovers: number;
   failed_automations: number;
+  /** WA2 Integration: total unread messages from GET /dashboard */
+  unread_messages?: number;
 }
 
 export interface SessionInfo {
@@ -189,3 +191,43 @@ export type WasenderWebhookPayload =
   | WebhookSessionPayload
   | WebhookQRPayload
   | { event: string; timestamp: number; data: unknown };
+
+// ─── WA2 API response types (https://wa2-api.vercel.app/api/docs) ────────────
+
+/** GET /chats — a single conversation document from MongoDB */
+export interface WA2Conversation {
+  _id: string;
+  phone: string;
+  name: string;
+  ai_response: boolean;
+  last_message: string;
+  unread_count: number;
+  updated_at: string;
+}
+
+/** GET /chats/{id}/messages — a single message document from MongoDB */
+export interface WA2Message {
+  _id: string;
+  conversation_id: string;
+  direction: "incoming" | "outgoing";
+  message: string;
+  media: string | null;
+  status: string;
+  timestamp: string;
+}
+
+/** GET /dashboard — aggregate totals + Wasender connection status */
+export interface WA2DashboardData {
+  totalConversations: number;
+  totalMessages: number;
+  totalUnread: number;
+  connection: Record<string, unknown>;
+}
+
+/** Standard WA2 API envelope: { success: boolean, data: T } or { success: false, message: string } */
+export interface WA2ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+

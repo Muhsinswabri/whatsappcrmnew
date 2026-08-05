@@ -3,6 +3,8 @@
 import React from "react";
 import { Stats, SessionInfo } from "@/lib/types";
 
+// WA2 Integration: Dashboard now shows aggregate stats from WA2 API GET /dashboard
+
 interface DashboardViewProps {
   stats: Stats | null;
   sessionInfo: SessionInfo | null;
@@ -52,7 +54,7 @@ export function DashboardView({ stats, sessionInfo }: DashboardViewProps) {
           Dashboard
         </h2>
         <p className="text-body-md text-on-surface-variant mt-1">
-          Overview of your WhatsApp CRM performance
+          Overview of your WhatsApp CRM performance — powered by WA2 API
         </p>
       </div>
 
@@ -60,7 +62,7 @@ export function DashboardView({ stats, sessionInfo }: DashboardViewProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <StatCard
           icon="contacts"
-          label="Total Contacts"
+          label="Total Conversations"
           value={stats?.total_contacts ?? "—"}
           color="text-primary"
           bgColor="bg-primary/10"
@@ -68,10 +70,18 @@ export function DashboardView({ stats, sessionInfo }: DashboardViewProps) {
         />
         <StatCard
           icon="chat_bubble"
-          label="Messages Today"
+          label="Total Messages"
           value={stats?.messages_today ?? "—"}
           color="text-secondary"
           bgColor="bg-secondary/10"
+          borderColor="border-outline-variant/30"
+        />
+        <StatCard
+          icon="mark_unread_chat_alt"
+          label="Total Unread"
+          value={stats?.unread_messages ?? "—"}
+          color="text-tertiary"
+          bgColor="bg-tertiary/10"
           borderColor="border-outline-variant/30"
         />
         <StatCard

@@ -5,9 +5,15 @@ import { api } from "@/lib/api";
 import { Contact, Message, SessionInfo } from "@/lib/types";
 import { usePolling } from "@/hooks/usePolling";
 import { MessageBubble } from "./MessageBubble";
-import { wasender } from "@/services/wasender";
 import { SessionStatus } from "./SessionStatus";
 
+/**
+ * WA2 Integration:
+ * - Messages load via GET /chats/{_id}/messages using conversation _id
+ * - Send uses POST /messages/send with { phone, message }
+ * - Toggle automation uses PATCH /chats/{_id} with { ai_response }
+ * - AI auto-reply label reflects WA2's ai_response field
+ */
 export function ChatWindow({
   contact,
   onContactUpdated,
@@ -27,43 +33,69 @@ export function ChatWindow({
   const [toggling, setToggling] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const prevPhoneRef = useRef<string | null>(null);
+  const prevIdRef = useRef<string | null>(null);
 
+  const [isValidating, setIsValidating] = useState(false);
+  const [isChatValid, setIsChatValid] = useState(true);
+
+  // WA2 Integration: load messages by conversation _id
   const loadMessages = useCallback(async () => {
     if (!contact) return;
-    const { messages: fetchedMsgs } = await api.getMessages(contact.phone);
-    setMessages(fetchedMsgs);
-  }, [contact?.phone]);
+    try {
+      const { messages: fetchedMsgs } = await api.getMessages(contact._id);
+      setMessages(fetchedMsgs);
+    } catch (e) {
+      console.error("[ChatWindow] Failed to load messages:", e);
+    }
+  }, [contact?._id]);
 
-  usePolling(loadMessages, 4000, !!contact);
+  const validateChat = useCallback(async () => {
+    if (!contact) return false;
+    try {
+      const res = await fetch(`/api/chat/validate/${encodeURIComponent(contact._id)}`);
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return false;
+      }
+      const data = await res.json();
+      setIsChatValid(data.valid);
+      return data.valid;
+    } catch (e) {
+      console.error("Chat validation error", e);
+      setIsChatValid(false);
+      return false;
+    }
+  }, [contact]);
+
+  usePolling(loadMessages, 4000, !!contact && isChatValid && !isValidating);
 
   useEffect(() => {
-    if (contact?.phone !== prevPhoneRef.current) {
-      prevPhoneRef.current = contact?.phone || null;
+    // WA2 Integration: track by _id instead of phone
+    if (contact?._id !== prevIdRef.current) {
+      prevIdRef.current = contact?._id || null;
       setMessages([]);
+      setIsChatValid(true);
       if (contact) {
         setLoadingMessages(true);
-        loadMessages().finally(() => setLoadingMessages(false));
+        setIsValidating(true);
+        validateChat().then((valid) => {
+          setIsValidating(false);
+          if (valid) {
+            loadMessages().finally(() => setLoadingMessages(false));
+          } else {
+            setLoadingMessages(false);
+          }
+        });
       }
     }
-  }, [contact?.phone, loadMessages]);
-
-  // Mark messages as read when we open a chat
-  useEffect(() => {
-    if (contact && messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg && lastMsg.direction === "inbound" && lastMsg.status !== "read") {
-        wasender.markAsRead(lastMsg._id).catch(() => {});
-      }
-    }
-  }, [contact?.phone, messages.length]);
+  }, [contact?._id, loadMessages, validateChat]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
   async function handleSend() {
-    if (!contact || (!text.trim() && !mediaUrl.trim())) return;
+    if (!contact || (!text.trim() && !mediaUrl.trim()) || !isChatValid) return;
 
     const trimmedText = text.trim();
     const trimmedMedia = mediaUrl.trim();
@@ -89,17 +121,24 @@ export function ChatWindow({
     setSending(true);
 
     try {
+      // WA2 Integration: send via POST /messages/send with { phone, message }
       const res = await api.sendMessage(contact.phone, trimmedText, trimmedMedia || undefined);
       if (res.ok) {
         setMessages((prev) =>
-          prev.map((m) => (m._id === tempId ? { ...m, _id: res.messageId || tempId, status: "sent" } : m))
+          prev.map((m) =>
+            m._id === tempId
+              ? { ...m, _id: res.messageId || tempId, status: "sent" }
+              : m
+          )
         );
       }
       await loadMessages();
       onContactUpdated();
     } catch (e: any) {
       setMessages((prev) =>
-        prev.map((m) => (m._id === tempId ? { ...m, status: "failed" } : m))
+        prev.map((m) =>
+          m._id === tempId ? { ...m, status: "failed" } : m
+        )
       );
       alert(e.message || "Failed to send message");
     } finally {
@@ -107,12 +146,13 @@ export function ChatWindow({
     }
   }
 
+  // WA2 Integration: toggle uses PATCH /chats/{_id} with { ai_response }
   async function handleToggle() {
     if (!contact) return;
     setToggling(true);
     try {
       const nextStatus = contact.automation_status === "OFF" ? "ON" : "OFF";
-      await api.toggleAutomation(contact.phone, nextStatus);
+      await api.toggleAutomation(contact._id, nextStatus);
       onContactUpdated();
     } catch (e: any) {
       alert(e.message || "Failed to toggle automation");
@@ -166,6 +206,7 @@ export function ChatWindow({
             />
             <div className="h-8 w-[1px] bg-outline-variant/30 mx-2"></div>
             <div className="flex items-center gap-3">
+              {/* WA2 Integration: ai_response true → Automated, false → Human Takeover */}
               <span
                 className={`px-3 py-1 rounded-full text-[11px] font-bold border ${
                   isOff
@@ -173,14 +214,14 @@ export function ChatWindow({
                     : "bg-primary/10 text-primary border-primary/20"
                 }`}
               >
-                {isOff ? "Human Takeover" : "Automated"}
+                {isOff ? "Human Takeover" : "AI Auto-Reply"}
               </span>
               <button
                 onClick={handleToggle}
                 disabled={toggling}
                 className="bg-primary-container text-on-primary px-6 py-2.5 rounded-xl text-label-md font-bold hover:bg-primary transition-colors shadow-sm disabled:opacity-50"
               >
-                {toggling ? "..." : isOff ? "Resume Automation" : "Take Over"}
+                {toggling ? "..." : isOff ? "Enable AI" : "Take Over"}
               </button>
             </div>
             <button className="text-on-surface-variant hover:text-on-surface p-2 rounded-full hover:bg-surface-variant/50 transition-colors ml-1">
@@ -203,15 +244,34 @@ export function ChatWindow({
         <div className="flex justify-center mb-4">
           <p className="text-xs text-on-surface-variant/70 italic text-center max-w-md bg-surface-container-highest/50 px-4 py-2 rounded-xl">
             {isOff
-              ? "Human takeover mode active. Automation is currently paused for this contact."
-              : "Automated session active. The bot is currently handling this conversation. Click 'Take Over' to intervene."}
+              ? "Human takeover mode active. AI auto-reply is paused for this conversation."
+              : "AI auto-reply is active. The AI assistant is handling this conversation. Click 'Take Over' to intervene."}
           </p>
         </div>
 
         {/* Messages */}
-        {loadingMessages ? (
+        {loadingMessages || isValidating ? (
           <div className="text-center text-on-surface-variant text-sm mt-8">
             Loading messages...
+          </div>
+        ) : !isChatValid ? (
+          <div className="flex flex-col items-center justify-center text-center mt-8 gap-4">
+            <div className="text-error font-semibold">Chat not available</div>
+            <button 
+              onClick={() => {
+                setIsValidating(true);
+                validateChat().then(valid => {
+                  setIsValidating(false);
+                  if (valid) {
+                    setLoadingMessages(true);
+                    loadMessages().finally(() => setLoadingMessages(false));
+                  }
+                });
+              }}
+              className="bg-primary-container text-on-primary px-4 py-2 rounded-xl text-sm font-bold hover:bg-primary transition-colors"
+            >
+              Reconnect
+            </button>
           </div>
         ) : messages.length === 0 ? (
           <div className="text-center text-on-surface-variant text-sm mt-8">
@@ -238,7 +298,8 @@ export function ChatWindow({
         <div className="flex items-center gap-3 bg-surface-container-highest rounded-[24px] p-3 shadow-md focus-within:ring-2 focus-within:ring-primary/30 transition-all">
           <button
             onClick={() => setShowMediaInput((v) => !v)}
-            className="text-on-surface-variant hover:text-primary p-2.5 rounded-full hover:bg-surface/50 transition-colors flex-shrink-0"
+            disabled={!isChatValid}
+            className="text-on-surface-variant hover:text-primary p-2.5 rounded-full hover:bg-surface/50 transition-colors flex-shrink-0 disabled:opacity-50"
             title="Attach media"
           >
             <span className="material-symbols-outlined">attach_file</span>
@@ -246,14 +307,15 @@ export function ChatWindow({
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
+            disabled={!isChatValid}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSend();
               }
             }}
-            className="flex-1 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-[15px] focus:outline-none focus:ring-0 py-2"
-            placeholder="Type a message..."
+            className="flex-1 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-[15px] focus:outline-none focus:ring-0 py-2 disabled:opacity-50"
+            placeholder={isChatValid ? "Type a message..." : "Chat unavailable"}
             type="text"
           />
           <button className="text-on-surface-variant hover:text-primary p-2.5 rounded-full hover:bg-surface/50 transition-colors flex-shrink-0">
@@ -264,7 +326,7 @@ export function ChatWindow({
           </button>
           <button
             onClick={handleSend}
-            disabled={sending}
+            disabled={sending || !isChatValid}
             className="bg-primary-container text-on-primary p-3 rounded-[16px] hover:bg-primary transition-colors flex-shrink-0 shadow-sm flex items-center justify-center ml-1 disabled:opacity-50"
           >
             <span

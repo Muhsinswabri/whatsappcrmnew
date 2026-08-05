@@ -3,6 +3,8 @@
 import React from "react";
 import { Contact, Stats } from "@/lib/types";
 
+// WA2 Integration: selection is now by conversation _id instead of phone
+
 function timeLabel(iso: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -75,13 +77,14 @@ export function ContactList({
         )}
 
         {contacts.map((c) => {
-          const isActive = c.phone === selectedPhone;
+          // WA2 Integration: compare by _id instead of phone
+          const isActive = c._id === selectedPhone;
           const isHumanMode = c.automation_status === "OFF";
 
           return (
             <button
               key={c._id}
-              onClick={() => onSelect(c.phone)}
+              onClick={() => onSelect(c._id)}
               className={`
                 w-full p-4 flex items-center gap-3 cursor-pointer rounded-2xl transition-colors text-left
                 ${
