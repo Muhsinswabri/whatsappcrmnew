@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Contact, Stats, SessionInfo } from "@/lib/types";
 import { usePolling } from "@/hooks/usePolling";
-import { useRealtimeSync } from "@/hooks/useRealtimeSync";
+
 import { Sidebar, ViewName } from "@/components/Sidebar";
 import { DashboardView } from "@/components/DashboardView";
 import { ContactList } from "@/components/ContactList";
@@ -44,40 +44,7 @@ export default function DashboardPage() {
   usePolling(loadStats, 15000, true);
   usePolling(loadSessionInfo, 10000, true);
 
-  // Real-time SSE Webhook Sync
-  useRealtimeSync({
-    activePhone: selectedPhone,
-    onContactUpdate: (update) => {
-      setContacts((prev) => {
-        const index = prev.findIndex(
-          (c) => c.phone === update.phone || c.phone.includes(update.phone) || update.phone.includes(c.phone)
-        );
-        if (index >= 0) {
-          const updated = [...prev];
-          updated[index] = {
-            ...updated[index],
-            ...update,
-            unread_count: (updated[index].unread_count || 0) + (update.unread_count || 0),
-          };
-          return updated;
-        } else {
-          const newContact: Contact = {
-            _id: `c_${Date.now()}`,
-            phone: update.phone,
-            name: update.name || update.phone,
-            last_message_at: update.last_message_at || new Date().toISOString(),
-            unread_count: update.unread_count || 1,
-            automation_status: "ON",
-            last_message_preview: update.last_message_preview || null,
-          };
-          return [newContact, ...prev];
-        }
-      });
-    },
-    onSessionUpdate: () => {
-      loadSessionInfo();
-    },
-  });
+
 
   const selectedContact = contacts.find((c) => c.phone === selectedPhone) || null;
 
