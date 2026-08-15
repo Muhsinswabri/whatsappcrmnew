@@ -6,6 +6,7 @@ export type ViewName =
   | "dashboard"
   | "chats"
   | "broadcasts"
+  | "ai_assistance"
   | "templates"
   | "settings";
 
@@ -19,6 +20,7 @@ const navItems: { view: ViewName; icon: string; label: string }[] = [
   { view: "dashboard", icon: "dashboard", label: "Dashboard" },
   { view: "chats", icon: "chat", label: "Chats" },
   { view: "broadcasts", icon: "campaign", label: "Broadcasts" },
+  { view: "ai_assistance", icon: "smart_toy", label: "AI Assistance" },
   { view: "templates", icon: "description", label: "Templates" },
   { view: "settings", icon: "settings", label: "Settings" },
 ];

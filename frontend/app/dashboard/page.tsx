@@ -104,6 +104,14 @@ export default function DashboardPage() {
           />
         )}
 
+        {activeView === "ai_assistance" && (
+          <ComingSoonPage
+            title="AI Assistance"
+            icon="smart_toy"
+            description="AI-powered CRM controls and advanced assistance features are coming soon."
+          />
+        )}
+
         {activeView === "templates" && (
           <ComingSoonPage
             title="Message Templates"
